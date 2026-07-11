@@ -11,7 +11,7 @@
   "prisma:migrate": "prisma migrate dev",
   "prisma:studio": "prisma studio",
   "postinstall": "npx prisma generate"
-}
+
   },
   "keywords": [],
   "author": "",
