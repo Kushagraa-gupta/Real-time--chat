@@ -70,6 +70,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.send('Real-time Chat App API is running. Check /api/health for status.');
+});
+
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
