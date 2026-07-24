@@ -10,6 +10,7 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const prisma_1 = require("./lib/prisma");
 // Load environment variables
 dotenv_1.default.config();
 // Initialize routes & middlewares
@@ -23,13 +24,19 @@ const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
 // Configure CORS
 const allowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
+    process.env.FRONTEND_URL,
     'http://localhost:3000',
     'http://127.0.0.1:3000'
-];
-app.use((0, cors_1.default)({
+].filter(Boolean);
+const corsOptions = {
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        if (!origin) {
+            callback(null, true);
+            return;
+        }
+        const isVercel = origin.endsWith('.vercel.app');
+        const isAllowed = allowedOrigins.includes(origin);
+        if (isAllowed || isVercel) {
             callback(null, true);
         }
         else {
@@ -37,7 +44,8 @@ app.use((0, cors_1.default)({
         }
     },
     credentials: true,
-}));
+};
+app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 // Ensure uploads folder exists
 const uploadsDir = path_1.default.join(__dirname, '../../uploads');
@@ -49,7 +57,20 @@ app.use('/uploads', express_1.default.static(uploadsDir));
 // Socket.io Server Setup
 const io = new socket_io_1.Server(server, {
     cors: {
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            if (!origin) {
+                callback(null, true);
+                return;
+            }
+            const isVercel = origin.endsWith('.vercel.app');
+            const isAllowed = allowedOrigins.includes(origin);
+            if (isAllowed || isVercel) {
+                callback(null, true);
+            }
+            else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
         credentials: true,
     },
@@ -60,9 +81,28 @@ app.use((req, res, next) => {
     req.io = io;
     next();
 });
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+// Health check endpoint with database check
+app.get('/api/health', async (req, res) => {
+    try {
+        await prisma_1.prisma.$queryRaw `SELECT 1`;
+        res.json({
+            status: 'ok',
+            database: 'connected',
+            timestamp: new Date()
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            status: 'error',
+            database: 'disconnected',
+            error: error.message,
+            timestamp: new Date()
+        });
+    }
+});
+// Root endpoint
+app.get('/', (req, res) => {
+    res.send('Real-time Chat App API is running. Check /api/health for status.');
 });
 // Routes
 app.use('/api/auth', authRoutes_1.default);
